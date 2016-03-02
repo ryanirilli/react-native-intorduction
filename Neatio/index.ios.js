@@ -7,10 +7,13 @@ import React, {
   AppRegistry,
   Component,
   StyleSheet,
+  StatusBar,
   Text,
   Image,
   ListView,
-  StatusBar,
+  TouchableHighlight,
+  Linking,
+  Modal,
   View
 } from 'react-native';
 
@@ -21,11 +24,18 @@ class Neatio extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      dataSource: new ListView.DataSource({
+      lps: new ListView.DataSource({
         rowHasChanged: (row1, row2) => row1 !== row2
       }),
+      selectedLp: null,
+      isShowingSelectedLp: false,
       loaded: false
     };
+
+    this.renderLp = this.renderLp.bind(this);
+    this._onPressLp = this._onPressLp.bind(this);
+    this._onPressDone = this._onPressDone.bind(this);
+    this._onPressLpLink = this._onPressLpLink.bind(this);
   }
 
   componentDidMount() {
@@ -36,9 +46,14 @@ class Neatio extends Component {
     fetch(REQUEST_URL)
       .then(response => response.json())
       .then(responseData => {
-        const lps = responseData.lps.filter(lp => !!lp.content.cardArtPath);
+        //remove lps with no cardArt
+        const lps = responseData.lps.filter(lp => {
+          const hasCardArt = !!lp.content.cardArtPath;
+          const isEnabled = lp.content.isEnabled;
+          return hasCardArt && isEnabled;
+        });
         this.setState({
-          dataSource: this.state.dataSource.cloneWithRows(lps),
+          lps: this.state.lps.cloneWithRows(lps),
           loaded: true
         });
       })
@@ -52,24 +67,72 @@ class Neatio extends Component {
 
     return (
       <View style={styles['app-container']}>
-        <StatusBar
-          backgroundColor='red'
-        />
+        <StatusBar barStyle="light-content" />
         <ListView
-          dataSource={this.state.dataSource}
-          renderSectionHeader={this.renderMoviesHeader}
+          dataSource={this.state.lps}
+          renderSectionHeader={this.renderWalletHeader}
           renderRow={this.renderLp}
           style={styles.lps}
         />
+
+        {this.state.isShowingSelectedLp ? this.renderLpDetail() : null}
+
       </View>
     );
   }
 
-  renderMoviesHeader() {
+  renderLpDetail() {
+    const { selectedLp } = this.state;
     return (
-      <View style={styles['movies-header']}>
-        <Text style={styles['movies-header__text']}>
-          Loyalty Wallet
+      <Modal animated={true}>
+        <View style={styles['lp-detail']}>
+          <View style={styles['lp-detail__logo-container']}>
+            <Image style={styles['lp-detail__logo']}
+                   resizeMode='contain'
+                   source={{uri: `https://www.points.com${selectedLp.content.logos.png}`}}
+            />
+          </View>
+          <Text style={styles.heading}>
+            {selectedLp.name}
+          </Text>
+
+          <TouchableHighlight onPress={() => {this._onPressLpLink(selectedLp.content.websiteUrl)}}>
+            <Text style={styles.link}>
+              {selectedLp.content.websiteUrl}
+            </Text>
+          </TouchableHighlight>
+
+          <Text style={styles.paragraph}>
+            {selectedLp.content.description}
+          </Text>
+          <Text style={styles.paragraph}>
+            {selectedLp.expiryPolicy}
+          </Text>
+          <TouchableHighlight onPress={this._onPressDone}>
+            <View style={[styles.btn, styles['btn-primary']]}>
+              <Text style={[styles['btn__text'], styles['text-white']]}>
+                Done
+              </Text>
+            </View>
+          </TouchableHighlight>
+        </View>
+      </Modal>
+    )
+  }
+
+  _onPressLpLink(url) {
+    Linking.openURL(url);
+  }
+
+  _onPressDone() {
+    this.setState({ isShowingSelectedLp: false });
+  }
+
+  renderWalletHeader() {
+    return (
+      <View style={styles['wallet-header']}>
+        <Text style={styles['wallet-header__text']}>
+          Loyalty Finder
         </Text>
       </View>
     );
@@ -85,20 +148,25 @@ class Neatio extends Component {
     );
   }
 
-  renderLp(lp) {
+  renderLp(lp, sectionID, rowID) {
+
     return (
       <View style={styles.lp}>
-        <Image
-          style={styles['lp__thumbnail']}
-          source={{uri: `https://www.points.com${lp.content.cardArtPath}`}}
-        />
-        <View style={styles['lp__content']}>
-          <Text style={styles['lp__title']}>{lp.title}</Text>
-          <Text style={styles['lp__year']}>{lp.year}</Text>
-        </View>
+        <TouchableHighlight onPress={() => this._onPressLp(rowID)}>
+          <Image
+            style={styles['lp__thumbnail']}
+            source={{uri: `https://www.points.com${lp.content.cardArtPath}`}}
+          />
+        </TouchableHighlight>
       </View>
     );
   }
+
+  _onPressLp(rowID) {
+    const selectedLp = this.state.lps.getRowData(0, rowID);
+    this.setState({ selectedLp, isShowingSelectedLp: true });
+  }
+
 }
 
 var styles = StyleSheet.create({
@@ -106,30 +174,44 @@ var styles = StyleSheet.create({
     flex: 1
   },
 
-  lps: {
-    paddingTop: 20
+  'lp-detail': {
+    flex: 1,
+    backgroundColor: 'white',
+    paddingTop: 40,
+    paddingRight: 20,
+    paddingBottom: 40,
+    paddingLeft: 20
   },
 
-  'movies-header': {
-    backgroundColor: '#2EA5DD',
+  'lp-detail__logo-container': {
+    alignItems: 'center'
+  },
+
+  'lp-detail__logo': {
+    width: 100,
+    height: 100
+  },
+
+  'wallet-header': {
+    backgroundColor: '#FF6138',
     paddingTop: 20,
     paddingBottom: 20
   },
 
-  'movies-header__text': {
+  'wallet-header__text': {
     color: 'white',
     textAlign: 'center'
   },
 
   lp: {
     flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 20,
-    paddingTop: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc'
+    alignItems: 'stretch',
+    paddingBottom: 10,
+    paddingTop: 10
+  },
+
+  'lp__thumbnail': {
+    height: 200
   },
 
   'lp__content': {
@@ -137,20 +219,43 @@ var styles = StyleSheet.create({
     paddingLeft: 20
   },
 
-  'lp__thumbnail': {
-    width: 400,
-    height: 252
+  heading: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 20
   },
 
-  'lp__title': {
-    fontSize: 20,
-    marginBottom: 8,
-    textAlign: 'left'
+  paragraph: {
+    fontWeight: '100',
+    marginTop: 10,
+    marginBottom: 10
   },
 
-  'lp__year': {
-    textAlign: 'left'
+  link: {
+    color: '#00A388'
+  },
+
+  btn: {
+    borderRadius: 4,
+    borderWidth: 1,
+    marginBottom: 10
+  },
+
+  'btn__text': {
+    textAlign: 'center',
+    fontSize: 18,
+    padding: 15
+  },
+
+  'btn-primary': {
+    backgroundColor: '#79BD8F',
+    borderColor: '#79BD8F'
+  },
+
+  'text-white': {
+    color: 'white'
   }
+
 
 });
 
